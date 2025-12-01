@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # SQL Server Database
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: jwtpoc-sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=YourStrong@Password123
+      - MSSQL_PID=Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - jwtpoc-network
+    healthcheck:
+      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong@Password123' -Q 'SELECT 1' || exit 1
+      interval: 10s
+      retries: 10
+      start_period: 10s
+      timeout: 3s
+
+  # JWT POC API
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jwtpoc-api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=JwtPocDb;User Id=sa;Password=YourStrong@Password123;TrustServerCertificate=true;
+      - Jwt__SecretKey=YourSuperSecretKeyForDevelopmentTesting12345!
+      - Jwt__Issuer=JwtPocApi
+      - Jwt__Audience=JwtPocClient
+    ports:
+      - "5000:8080"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - jwtpoc-network
+    restart: unless-stopped
+
+volumes:
+  sqlserver_data:
+    driver: local
+
+networks:
+  jwtpoc-network:
+    driver: bridge
